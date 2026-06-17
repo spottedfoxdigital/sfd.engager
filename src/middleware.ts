@@ -8,6 +8,9 @@ const PUBLIC_PATHS = [
   "/login",
   "/api/login",
   "/api/health",
+  // Public legal pages (required for Meta App Review).
+  "/privacy",
+  "/data-deletion",
   // Meta hits these without our session cookie (webhook callbacks, OAuth redirect).
   "/api/meta/webhook",
   "/api/meta/oauth",
