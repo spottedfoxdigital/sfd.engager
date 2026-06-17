@@ -7,6 +7,13 @@ const prisma = new PrismaClient();
 // produces realistic, on-brand comments to triage.
 
 async function main() {
+  // Idempotent: skip if already seeded (so redeploys don't duplicate data).
+  const existing = await prisma.account.count();
+  if (existing > 0) {
+    console.log(`Seed skipped — ${existing} account(s) already present.`);
+    return;
+  }
+
   const accounts = [
     {
       name: "Sunrise Cafe",

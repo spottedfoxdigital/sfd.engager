@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "next start",
+    "start": "prisma db push --skip-generate && tsx prisma/seed.ts && next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "db:push": "prisma db push",
@@ -21,8 +21,10 @@
     "@anthropic-ai/sdk": "^0.68.0",
     "@prisma/client": "^6.4.1",
     "next": "^15.5.9",
+    "prisma": "^6.4.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "tsx": "^4.19.2",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -30,9 +32,7 @@
     "@types/node": "^22.13.1",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
-    "prisma": "^6.4.1",
     "tailwindcss": "^4.0.6",
-    "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   },
   "engines": {
