@@ -18,27 +18,34 @@ export async function GET(req: Request) {
 
   const origin = new URL(req.url).origin;
   const redirectUri = `${origin}/api/meta/oauth/callback`;
-
-  // Permissions needed for comments + DMs. The DM scopes require App Review.
-  const scopes = [
-    "pages_show_list",
-    "pages_read_engagement",
-    "pages_manage_engagement",
-    "pages_manage_metadata",
-    "business_management",
-    "instagram_basic",
-    "instagram_manage_comments",
-    "instagram_manage_messages",
-    "pages_messaging",
-  ].join(",");
-
   const state = crypto.randomUUID();
+
   const url = new URL("https://www.facebook.com/v21.0/dialog/oauth");
   url.searchParams.set("client_id", appId);
   url.searchParams.set("redirect_uri", redirectUri);
-  url.searchParams.set("scope", scopes);
   url.searchParams.set("state", state);
   url.searchParams.set("response_type", "code");
+
+  const configId = process.env.META_LOGIN_CONFIG_ID;
+  if (configId) {
+    // Facebook Login for Business: permissions come from the saved
+    // configuration, NOT a scope list. Sending scopes triggers "Invalid Scopes".
+    url.searchParams.set("config_id", configId);
+  } else {
+    // Classic Facebook Login fallback (non-Business apps).
+    const scopes = [
+      "pages_show_list",
+      "pages_read_engagement",
+      "pages_manage_engagement",
+      "pages_manage_metadata",
+      "business_management",
+      "instagram_basic",
+      "instagram_manage_comments",
+      "instagram_manage_messages",
+      "pages_messaging",
+    ].join(",");
+    url.searchParams.set("scope", scopes);
+  }
 
   const res = NextResponse.redirect(url.toString());
   // Store state in a short-lived cookie for CSRF protection on callback.
