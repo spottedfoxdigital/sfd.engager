@@ -48,7 +48,16 @@ export default async function DashboardLayout({
                 href={`/inbox?account=${a.id}`}
                 className="flex items-center justify-between rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
               >
-                <span className="truncate">{a.name}</span>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span
+                    className={`shrink-0 rounded px-1 text-[10px] font-semibold ${
+                      a.platform === "instagram" ? "bg-pink-100 text-pink-700" : "bg-blue-100 text-blue-700"
+                    }`}
+                  >
+                    {a.platform === "instagram" ? "IG" : "FB"}
+                  </span>
+                  <span className="truncate">{a.name}</span>
+                </span>
                 {a._count.comments > 0 && (
                   <span className="ml-2 rounded-full bg-zinc-900 px-1.5 text-xs text-white">{a._count.comments}</span>
                 )}
