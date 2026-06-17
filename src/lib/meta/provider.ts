@@ -1,10 +1,11 @@
 // The Meta provider abstraction.
 //
 // Everything the app does against Facebook/Instagram goes through this
-// interface. Today only the Mock implementation exists, so the whole dashboard
-// is usable with realistic data while the Meta Developer App + App Review are
-// pending. When the live Graph API client is built, it implements this same
-// interface and we flip META_PROVIDER=meta — no UI/logic changes required.
+// interface. Two implementations:
+//   - MockProvider   (src/lib/meta/mock.ts)  — realistic fake data, default
+//   - MetaProvider   (src/lib/meta/meta.ts)  — live Graph API
+// Flip with META_PROVIDER=meta once the Meta Developer App + App Review are
+// ready. The rest of the app never changes.
 
 export interface IncomingComment {
   externalId: string;
@@ -16,28 +17,49 @@ export interface IncomingComment {
   commentedAt: Date;
 }
 
+export interface IncomingDM {
+  // The Meta conversation/thread id.
+  externalId: string;
+  accountExternalId: string;
+  participantName: string;
+  participantHandle?: string;
+  // The latest inbound message text.
+  text: string;
+  messageExternalId: string;
+  sentAt: Date;
+}
+
 export interface MetaProvider {
+  // --- Comments ---
   /** Pull new comments since the last sync (webhook-backed once live). */
   fetchNewComments(): Promise<IncomingComment[]>;
-  /** Like a comment. */
+  /** Like a comment. NOTE: supported on Facebook only — Instagram's API has no
+   *  like endpoint, so the live provider throws for IG and the app routes IG
+   *  positives to a manual-like queue instead. */
   likeComment(externalId: string): Promise<void>;
   /** Hide a comment (used for clear spam). */
   hideComment(externalId: string): Promise<void>;
   /** Publish a reply to a comment. */
   replyToComment(externalId: string, message: string): Promise<void>;
+
+  // --- Direct messages ---
+  /** Pull new DM threads / inbound messages. */
+  fetchNewDMs(): Promise<IncomingDM[]>;
+  /** Send a DM reply in a conversation (subject to Meta's 24h window). */
+  sendDM(conversationExternalId: string, message: string): Promise<void>;
 }
 
+let cached: MetaProvider | null = null;
+
 export function getProvider(): MetaProvider {
-  // Only "mock" is implemented today. "meta" will be added once App Review
-  // clears; we throw clearly rather than silently doing nothing.
+  if (cached) return cached;
   const which = process.env.META_PROVIDER ?? "mock";
   if (which === "meta") {
-    throw new Error(
-      "Live Meta provider not yet implemented — set META_PROVIDER=mock until the Graph API client + App Review are ready."
-    );
+    const { LiveMetaProvider } = require("./meta") as typeof import("./meta");
+    cached = new LiveMetaProvider();
+  } else {
+    const { MockProvider } = require("./mock") as typeof import("./mock");
+    cached = new MockProvider();
   }
-  // Lazy import so the mock (and its seed data) isn't bundled into edge runtimes.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { MockProvider } = require("./mock") as typeof import("./mock");
-  return new MockProvider();
+  return cached;
 }

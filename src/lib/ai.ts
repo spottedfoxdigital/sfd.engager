@@ -80,19 +80,26 @@ export interface VoiceProfile {
 export async function draftReply(
   commentText: string,
   authorName: string,
-  voice: VoiceProfile
+  voice: VoiceProfile,
+  kind: "comment" | "dm" = "comment"
 ): Promise<{ body: string; model: string | null }> {
   const anthropic = getClient();
   if (!anthropic) return { body: heuristicDraft(commentText, voice), model: null };
 
   try {
+    const channel =
+      kind === "dm"
+        ? `You write private direct-message (DM) replies on behalf of "${voice.accountName}", a small business, responding privately to someone who messaged them.`
+        : `You write public reply comments on behalf of "${voice.accountName}", a small business, responding to its audience.`;
     const system = [
-      `You write public reply comments on behalf of "${voice.accountName}", a small business, responding to its audience.`,
+      channel,
       voice.tone ? `Voice/tone: ${voice.tone}.` : "Voice/tone: warm, friendly, concise.",
       voice.dos ? `Do: ${voice.dos}.` : "",
       voice.donts ? `Don't: ${voice.donts}.` : "",
       voice.bannedWords ? `Never use these words: ${voice.bannedWords}.` : "",
-      "Write ONE reply, 1-2 sentences, no hashtags, no preamble. Sound like a real person from the business, not a bot.",
+      kind === "dm"
+        ? "Write ONE short, helpful DM reply, 1-3 sentences, no hashtags, no preamble."
+        : "Write ONE reply, 1-2 sentences, no hashtags, no preamble. Sound like a real person from the business, not a bot.",
     ]
       .filter(Boolean)
       .join(" ");
@@ -122,11 +129,17 @@ export async function draftReply(
 // ---------------------------------------------------------------------------
 
 const SPAM_PATTERNS = [
-  /\b(bit\.ly|tinyurl|\.link\/|link in bio)\b/i,
+  /\b(bit\.ly|tinyurl|link in bio)\b/i,
+  /[a-z0-9-]+\.(link|win|click|info|xyz|top)\//i, // shady short/promo links
   /\$\d{3,}/,
-  /\bDM me\b/i,
+  /\bDM (me|back)\b/i,
   /follow(ers)?\s*(for|4)\s*follow/i,
-  /\b(crypto|forex|gift card|free money|click here|claim now|90% off)\b/i,
+  /\b\d+k\s+(real\s+)?followers\b/i, // "10k followers"
+  /\bgrow your (page|account|following)\b/i,
+  /\bfree (iphone|gift ?card|prize|money|followers)\b/i,
+  /\byou('|’)?ve been selected\b/i,
+  /\b(crypto|forex|gift card|free money|click here|claim now|90% off|claim your)\b/i,
+  /\bclick to claim\b/i,
   /🚀{2,}/,
 ];
 const PROMO_HINTS = [/check (out )?my profile/i, /visit our store/i, /link in bio/i];

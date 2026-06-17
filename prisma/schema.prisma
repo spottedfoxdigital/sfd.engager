@@ -32,6 +32,15 @@ model Account {
   autoLike     Boolean @default(true)
   autoHideSpam Boolean @default(true)
 
+  // --- Meta connection (populated by the OAuth connect flow when live) ---
+  // For a Facebook Page: metaPageId + pageAccessToken.
+  // For Instagram: igUserId is the IG Business account id (also via the Page).
+  metaPageId      String?
+  igUserId        String?
+  pageAccessToken String?
+  tokenExpiresAt  DateTime?
+  connected       Boolean   @default(false)
+
   posts         Post[]
   comments      Comment[]
   conversations Conversation[]
@@ -118,22 +127,52 @@ model Draft {
   updatedAt DateTime @updatedAt
 }
 
-/// DM thread — stubbed for the next phase (needs Meta App Review).
+/// A DM thread with one of the audience. The 24-hour reply window (Meta rule)
+/// is tracked via lastInboundAt.
 model Conversation {
-  id         String   @id @default(cuid())
-  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  accountId  String
-  externalId String?
+  id              String   @id @default(cuid())
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId       String
+  externalId      String?  // Meta conversation/thread id once live
   participantName String
-  lastMessageAt   DateTime @default(now())
-  // open | replied | spam | dismissed
-  status     String   @default("open")
+  participantHandle String?
 
-  draft Draft?
+  lastMessageAt DateTime  @default(now())
+  // When the participant last messaged us — Meta only lets us reply freely
+  // within 24h of this. After that, sending is blocked (needs a message tag).
+  lastInboundAt DateTime  @default(now())
+
+  // --- Classification of the latest inbound message ---
+  sentiment    String?
+  spamLabel    String?
+  reason       String?
+  flagged      Boolean   @default(false)
+  classifiedAt DateTime?
+
+  // open | needs_reply | spam_review | spam_hidden | replied | dismissed
+  status String @default("open")
+
+  messages Message[]
+  draft    Draft?
 
   createdAt DateTime @default(now())
 
   @@index([accountId])
+  @@index([status])
+}
+
+/// A single message inside a DM thread.
+model Message {
+  id             String       @id @default(cuid())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversationId String
+  externalId     String?
+  // true if WE sent it, false if it's from the participant (inbound)
+  fromUs    Boolean  @default(false)
+  text      String
+  sentAt    DateTime @default(now())
+
+  @@index([conversationId])
 }
 
 /// Audit log of every automatic action, so nothing happens invisibly.

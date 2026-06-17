@@ -33,6 +33,12 @@ export async function POST(
       await log(comment.accountId, id, "auto_like", "manual like");
       break;
     }
+    case "mark_liked": {
+      // IG manual-like queue: human liked it in Instagram, clears it here.
+      await prisma.comment.update({ where: { id }, data: { liked: true, status: "auto_liked" } });
+      await log(comment.accountId, id, "manual_like_done", "liked in Instagram");
+      break;
+    }
     case "dismiss": {
       await prisma.comment.update({ where: { id }, data: { status: "dismissed" } });
       await log(comment.accountId, id, "dismissed", null);

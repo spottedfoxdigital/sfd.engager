@@ -9,18 +9,19 @@
 // Next phase: replace the polling loop with Meta webhook delivery + a proper
 // job queue (BullMQ/Redis) and add DM ingestion.
 
-import { ingestComments, processPending } from "../src/lib/process";
+import { runSync } from "../src/lib/process";
 
 const INTERVAL_MS = Number(process.env.WORKER_INTERVAL_MS ?? 30_000);
 
 async function tick() {
   try {
-    const ingested = await ingestComments();
-    const counts = await processPending();
-    if (ingested || counts.processed) {
+    const r = await runSync();
+    if (r.ingestedComments || r.comments.processed || r.ingestedDMs || r.dms.processed) {
       console.log(
-        `[worker] ingested=${ingested} processed=${counts.processed} liked=${counts.autoLiked} ` +
-          `needsReply=${counts.needsReply} spamReview=${counts.spamReview} hidden=${counts.autoHidden}`
+        `[worker] comments: ingested=${r.ingestedComments} liked=${r.comments.autoLiked} ` +
+          `manualLike=${r.comments.manualLike} needsReply=${r.comments.needsReply} ` +
+          `spamReview=${r.comments.spamReview} hidden=${r.comments.autoHidden} | ` +
+          `dms: ingested=${r.ingestedDMs} needsReply=${r.dms.needsReply} hidden=${r.dms.autoHidden}`
       );
     }
   } catch (err) {

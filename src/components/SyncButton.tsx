@@ -16,7 +16,8 @@ export default function SyncButton() {
     setLoading(false);
     if (res.ok) {
       setSummary(
-        `+${data.ingested} new · ${data.autoLiked} liked · ${data.needsReply} to reply · ${data.spamReview} spam review · ${data.autoHidden} hidden`
+        `+${data.ingested} new · ${data.autoLiked} liked · ${data.manualLike} manual-like · ` +
+          `${data.needsReply} to reply · ${data.dmsNeedReply} DMs · ${data.spamReview} spam · ${data.autoHidden} hidden`
       );
       router.refresh();
     } else {

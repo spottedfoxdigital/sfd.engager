@@ -4,7 +4,14 @@ import { AUTH_COOKIE, verifyToken } from "@/lib/auth";
 
 // Protect everything except the login page, the login API, health check, and
 // static assets.
-const PUBLIC_PATHS = ["/login", "/api/login", "/api/health"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/api/login",
+  "/api/health",
+  // Meta hits these without our session cookie (webhook callbacks, OAuth redirect).
+  "/api/meta/webhook",
+  "/api/meta/oauth",
+];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

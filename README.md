@@ -32,12 +32,21 @@ today, before any Meta approval, so you can see and feel the workflow.
 - Claude-powered spam + sentiment classification (Haiku 4.5) and reply drafting
   (Sonnet 4.6), with built-in heuristic fallbacks so it runs without an API key.
 
+**Also built (Meta connection phase)**
+
+- **DM inbox** (`/messages`) — threads classified, spam auto-handled, AI-drafted
+  replies with Send/Edit/Dismiss, and Meta's **24-hour reply window** enforced.
+- **Manual-like (IG) queue** — Instagram's API can't like comments, so positive
+  IG comments route to a queue you clear by hand. Facebook comments auto-like.
+- **Live Meta provider** (`src/lib/meta/meta.ts`), **OAuth connect flow**
+  (`/api/meta/oauth/*`), and **webhooks** (`/api/meta/webhook`) — complete, used
+  when `META_PROVIDER=meta`. See **META_SETUP.md** for the Meta Developer App +
+  App Review checklist.
+
 **What's stubbed for the next phases**
 
-- The live Meta Graph API provider (currently `mock`).
-- DM ingestion + drafting (needs Meta App Review — see below).
 - Editable brand-voice settings + "seed voice from past posts".
-- Background worker on a real queue (BullMQ/Redis) + Meta webhooks.
+- Background worker on a real queue (BullMQ/Redis).
 
 ---
 

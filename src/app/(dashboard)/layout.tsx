@@ -26,7 +26,10 @@ export default async function DashboardLayout({
 
         <nav className="mt-6 space-y-1">
           <Link href="/inbox" className="block rounded-lg px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100">
-            Inbox
+            Comments
+          </Link>
+          <Link href="/messages" className="block rounded-lg px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100">
+            Messages
           </Link>
           <Link href="/accounts" className="block rounded-lg px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100">
             Accounts

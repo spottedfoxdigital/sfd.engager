@@ -9,16 +9,46 @@ export default async function AccountsPage() {
     <div className="mx-auto max-w-3xl p-6">
       <h2 className="text-xl font-semibold text-zinc-900">Accounts</h2>
       <p className="mt-1 text-sm text-zinc-500">
-        Brand voice &amp; automation per client. (Editing UI lands in the next phase — values shown
-        are seeded.)
+        Brand voice &amp; automation per client. (Editable settings land in the next phase — values
+        shown are seeded.)
       </p>
+
+      <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-medium text-zinc-900">Connect Facebook &amp; Instagram</h3>
+            <p className="text-sm text-zinc-500">
+              Link your clients&apos; Facebook Pages and connected Instagram Business accounts.
+            </p>
+          </div>
+          <a
+            href="/api/meta/oauth/start"
+            className="rounded-lg bg-[#1877F2] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+          >
+            Connect with Facebook
+          </a>
+        </div>
+        <p className="mt-2 text-xs text-zinc-400">
+          Requires the Meta Developer App to be set up and approved — see <code>META_SETUP.md</code>.
+          Until then this runs in mock mode with the sample accounts below.
+        </p>
+      </div>
 
       <div className="mt-4 space-y-3">
         {accounts.map((a) => (
           <div key={a.id} className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-medium text-zinc-900">{a.name}</h3>
+                <h3 className="flex items-center gap-2 font-medium text-zinc-900">
+                  {a.name}
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      a.connected ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-500"
+                    }`}
+                  >
+                    {a.connected ? "Connected" : "Mock"}
+                  </span>
+                </h3>
                 <p className="text-xs text-zinc-400">
                   {a.platform} · @{a.handle}
                 </p>

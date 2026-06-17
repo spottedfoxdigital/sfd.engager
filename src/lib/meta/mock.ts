@@ -1,4 +1,4 @@
-import type { IncomingComment, MetaProvider } from "./provider";
+import type { IncomingComment, IncomingDM, MetaProvider } from "./provider";
 
 // A pool of realistic comments across the categories that matter to our rules:
 // positive / neutral (auto-like), questions (flag), negative (flag),
@@ -38,6 +38,25 @@ const SAMPLES: Sample[] = [
   { accountExternalId: "acct_trail", postExternalId: "post_trail_1", author: "DealsBot", handle: "best.deals.daily", text: "Cheap designer bags 90% off!! visit our store link in bio 💼" },
 ];
 
+// Sample DM threads across the categories that matter: a question, a genuine
+// lead, a complaint, and obvious spam.
+type DMSample = {
+  accountExternalId: string;
+  participant: string;
+  handle: string;
+  text: string;
+};
+
+// accountExternalId matches the seeded account handle (see prisma/seed.ts).
+const DM_SAMPLES: DMSample[] = [
+  { accountExternalId: "sunrisecafe", participant: "Jordan Lee", handle: "jordan.l", text: "Hi! Do you take reservations for groups of 8 on weekends?" },
+  { accountExternalId: "sunrisecafe", participant: "Bella", handle: "bella.brunch", text: "Obsessed with your croissants!! Do you ship nationwide?" },
+  { accountExternalId: "NorthsideDental", participant: "Mark T.", handle: "", text: "I think I was overcharged on my last visit, can someone look into it?" },
+  { accountExternalId: "NorthsideDental", participant: "WinnerBot", handle: "prize.alerts", text: "You've been selected for a FREE iPhone 15!! Click to claim 🎉 promo.win/now" },
+  { accountExternalId: "trailheadoutfitters", participant: "Avery", handle: "avery.hikes", text: "Is the Summit 45 pack back in stock in green?" },
+  { accountExternalId: "trailheadoutfitters", participant: "GrowFast", handle: "grow.your.page", text: "Want 10k real followers fast? We can help, DM back YES 🚀" },
+];
+
 export class MockProvider implements MetaProvider {
   async fetchNewComments(): Promise<IncomingComment[]> {
     // Return 3–5 random samples with unique external ids each call.
@@ -62,6 +81,30 @@ export class MockProvider implements MetaProvider {
     return picked;
   }
 
+  async fetchNewDMs(): Promise<IncomingDM[]> {
+    // Return 1–3 random DM threads per call.
+    const count = 1 + Math.floor(Math.random() * 3);
+    const picked: IncomingDM[] = [];
+    const used = new Set<number>();
+    while (picked.length < count && used.size < DM_SAMPLES.length) {
+      const i = Math.floor(Math.random() * DM_SAMPLES.length);
+      if (used.has(i)) continue;
+      used.add(i);
+      const s = DM_SAMPLES[i];
+      const stamp = `${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`;
+      picked.push({
+        externalId: `dm_${stamp}`,
+        accountExternalId: s.accountExternalId,
+        participantName: s.participant,
+        participantHandle: s.handle || undefined,
+        text: s.text,
+        messageExternalId: `msg_${stamp}`,
+        sentAt: new Date(),
+      });
+    }
+    return picked;
+  }
+
   async likeComment(externalId: string): Promise<void> {
     // No-op in mock mode. The live provider will call the Graph API here.
     void externalId;
@@ -73,6 +116,11 @@ export class MockProvider implements MetaProvider {
 
   async replyToComment(externalId: string, message: string): Promise<void> {
     void externalId;
+    void message;
+  }
+
+  async sendDM(conversationExternalId: string, message: string): Promise<void> {
+    void conversationExternalId;
     void message;
   }
 }
