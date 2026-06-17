@@ -1,0 +1,189 @@
+// SFD Engager — data model
+// Slice scope: accounts, posts, comments, AI classification, drafts, action log.
+// DM/conversation models are stubbed in so the schema is ready for the next phase.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// A connected Facebook Page / Instagram Business account = one client.
+model Account {
+  id        String   @id @default(cuid())
+  // Display name shown in the dashboard, e.g. "Sunrise Cafe".
+  name      String
+  // "instagram" | "facebook"
+  platform  String
+  // @handle or page slug for display.
+  handle    String
+  avatarUrl String?
+
+  // --- Brand voice (seeded from past posts, refined on the settings page) ---
+  voiceTone   String?  // freeform description, e.g. "warm, playful, concise"
+  voiceDos    String?  // things to do
+  voiceDonts  String?  // things to avoid
+  bannedWords String?  // comma-separated words the AI must never use
+
+  // --- Automation settings (per the agreed defaults) ---
+  autoLike     Boolean @default(true)
+  autoHideSpam Boolean @default(true)
+
+  // --- Meta connection (populated by the OAuth connect flow when live) ---
+  // For a Facebook Page: metaPageId + pageAccessToken.
+  // For Instagram: igUserId is the IG Business account id (also via the Page).
+  metaPageId      String?
+  igUserId        String?
+  pageAccessToken String?
+  tokenExpiresAt  DateTime?
+  connected       Boolean   @default(false)
+
+  posts         Post[]
+  comments      Comment[]
+  conversations Conversation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// A published post we track engagement on.
+model Post {
+  id         String   @id @default(cuid())
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId  String
+  externalId String? // Meta object id once live
+  caption    String
+  mediaUrl   String?
+  permalink  String?
+  postedAt   DateTime @default(now())
+
+  comments Comment[]
+
+  @@index([accountId])
+}
+
+/// A comment on a post, plus its AI classification and resulting status.
+model Comment {
+  id         String   @id @default(cuid())
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId  String
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId     String
+  externalId String? // Meta comment id once live
+
+  authorName   String
+  authorHandle String?
+  text         String
+  commentedAt  DateTime @default(now())
+
+  // --- Classification (filled in by the AI / heuristic pass) ---
+  // sentiment: positive | neutral | negative | question
+  sentiment    String?
+  // spam: clean | spam | unsure
+  spamLabel    String?
+  // why the classifier decided what it did (for transparency)
+  reason       String?
+  // true when the comment was held back from auto-like (negative/question/etc.)
+  flagged      Boolean  @default(false)
+  classifiedAt DateTime?
+
+  // --- Status the inbox filters on ---
+  // pending     -> just ingested, not processed
+  // auto_liked  -> liked automatically, no action needed
+  // needs_reply -> flagged, AI drafted a reply, waiting on a human
+  // spam_review -> classifier unsure, asking the human to confirm
+  // spam_hidden -> clearly spam, auto-hidden
+  // replied     -> human sent a reply
+  // dismissed   -> human dismissed it
+  status     String   @default("pending")
+  liked      Boolean  @default(false)
+
+  draft Draft?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([accountId])
+  @@index([status])
+}
+
+/// An AI-drafted reply awaiting human Send / Edit. Reused for DMs later.
+model Draft {
+  id        String   @id @default(cuid())
+  // "comment" | "dm"
+  kind      String   @default("comment")
+  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  commentId String?  @unique
+  message   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversationId String? @unique
+
+  // The AI's suggested text. The human can edit before sending.
+  body      String
+  model     String? // which model produced it
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// A DM thread with one of the audience. The 24-hour reply window (Meta rule)
+/// is tracked via lastInboundAt.
+model Conversation {
+  id              String   @id @default(cuid())
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId       String
+  externalId      String?  // Meta conversation/thread id once live
+  participantName String
+  participantHandle String?
+
+  lastMessageAt DateTime  @default(now())
+  // When the participant last messaged us — Meta only lets us reply freely
+  // within 24h of this. After that, sending is blocked (needs a message tag).
+  lastInboundAt DateTime  @default(now())
+
+  // --- Classification of the latest inbound message ---
+  sentiment    String?
+  spamLabel    String?
+  reason       String?
+  flagged      Boolean   @default(false)
+  classifiedAt DateTime?
+
+  // open | needs_reply | spam_review | spam_hidden | replied | dismissed
+  status String @default("open")
+
+  messages Message[]
+  draft    Draft?
+
+  createdAt DateTime @default(now())
+
+  @@index([accountId])
+  @@index([status])
+}
+
+/// A single message inside a DM thread.
+model Message {
+  id             String       @id @default(cuid())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversationId String
+  externalId     String?
+  // true if WE sent it, false if it's from the participant (inbound)
+  fromUs    Boolean  @default(false)
+  text      String
+  sentAt    DateTime @default(now())
+
+  @@index([conversationId])
+}
+
+/// Audit log of every automatic action, so nothing happens invisibly.
+model ActionLog {
+  id        String   @id @default(cuid())
+  accountId String?
+  targetId  String?  // comment/conversation id
+  // auto_like | auto_hide_spam | flag | draft | reply_sent | spam_confirmed | dismissed
+  action    String
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([accountId])
+}
