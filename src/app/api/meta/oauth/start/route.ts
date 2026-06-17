@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getBaseUrl } from "@/lib/baseUrl";
 
 // Kicks off Facebook Login so the user can connect their Pages / IG accounts.
 // Requires META_APP_ID. Until the Meta Developer App exists, this returns a
@@ -16,8 +17,7 @@ export async function GET(req: Request) {
     );
   }
 
-  const origin = new URL(req.url).origin;
-  const redirectUri = `${origin}/api/meta/oauth/callback`;
+  const redirectUri = `${getBaseUrl(req)}/api/meta/oauth/callback`;
   const state = crypto.randomUUID();
 
   const url = new URL("https://www.facebook.com/v21.0/dialog/oauth");

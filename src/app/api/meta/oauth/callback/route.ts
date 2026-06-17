@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getBaseUrl } from "@/lib/baseUrl";
 
 const GRAPH = "https://graph.facebook.com/v21.0";
 
@@ -8,6 +9,7 @@ const GRAPH = "https://graph.facebook.com/v21.0";
 // upserts an Account row per Page with a long-lived page access token.
 export async function GET(req: Request) {
   const url = new URL(req.url);
+  const base = getBaseUrl(req);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const cookieState = req.headers
@@ -17,14 +19,14 @@ export async function GET(req: Request) {
     .find((c) => c.startsWith("meta_oauth_state="))
     ?.split("=")[1];
 
-  if (!code) return redirectToAccounts(url.origin, "error=missing_code");
-  if (!state || state !== cookieState) return redirectToAccounts(url.origin, "error=bad_state");
+  if (!code) return redirectToAccounts(base, "error=missing_code");
+  if (!state || state !== cookieState) return redirectToAccounts(base, "error=bad_state");
 
   const appId = process.env.META_APP_ID;
   const appSecret = process.env.META_APP_SECRET;
-  if (!appId || !appSecret) return redirectToAccounts(url.origin, "error=not_configured");
+  if (!appId || !appSecret) return redirectToAccounts(base, "error=not_configured");
 
-  const redirectUri = `${url.origin}/api/meta/oauth/callback`;
+  const redirectUri = `${base}/api/meta/oauth/callback`;
 
   try {
     // 1. Code -> short-lived user token
@@ -72,10 +74,10 @@ export async function GET(req: Request) {
     }
   } catch (err) {
     console.error("meta oauth callback failed:", err);
-    return redirectToAccounts(url.origin, "error=exchange_failed");
+    return redirectToAccounts(base, "error=exchange_failed");
   }
 
-  return redirectToAccounts(url.origin, "connected=1");
+  return redirectToAccounts(base, "connected=1");
 }
 
 async function upsertAccount(data: {
