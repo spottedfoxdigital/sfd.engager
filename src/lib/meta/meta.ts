@@ -52,63 +52,67 @@ function connectedAccounts() {
 export class LiveMetaProvider implements MetaProvider {
   async fetchNewComments(): Promise<IncomingComment[]> {
     const accounts = await connectedAccounts();
-    const out: IncomingComment[] = [];
+    // Fetch all accounts in parallel — sequential is far too slow at scale.
+    const perAccount = await Promise.all(accounts.map((a) => this.accountComments(a)));
+    return perAccount.flat();
+  }
 
-    for (const a of accounts) {
-      const token = a.pageAccessToken!;
-      try {
-        if (a.platform === "instagram" && a.igUserId) {
-          // IG: media -> comments
-          const media = await graphGet(`${a.igUserId}/media`, token, {
-            fields: "id,caption,permalink",
-            limit: "10",
-          });
-          for (const m of media.data ?? []) {
+  private async accountComments(a: {
+    id: string;
+    platform: string;
+    igUserId: string | null;
+    metaPageId: string | null;
+    pageAccessToken: string | null;
+  }): Promise<IncomingComment[]> {
+    const token = a.pageAccessToken!;
+    try {
+      if (a.platform === "instagram" && a.igUserId) {
+        const media = await graphGet(`${a.igUserId}/media`, token, { fields: "id", limit: "10" });
+        const lists = await Promise.all(
+          (media.data ?? []).map(async (m: { id: string }) => {
             const comments = await graphGet(`${m.id}/comments`, token, {
               fields: "id,text,username,timestamp",
               limit: "25",
             });
-            for (const c of comments.data ?? []) {
-              out.push({
-                externalId: c.id,
-                accountExternalId: a.id,
-                postExternalId: m.id,
-                authorName: c.username ?? "Instagram user",
-                authorHandle: c.username,
-                text: c.text ?? "",
-                commentedAt: c.timestamp ? new Date(c.timestamp) : new Date(),
-              });
-            }
-          }
-        } else if (a.metaPageId) {
-          // Facebook: posts -> comments
-          const posts = await graphGet(`${a.metaPageId}/posts`, token, {
-            fields: "id,message,permalink_url",
-            limit: "10",
-          });
-          for (const p of posts.data ?? []) {
+            return (comments.data ?? []).map((c: { id: string; text?: string; username?: string; timestamp?: string }) => ({
+              externalId: c.id,
+              accountExternalId: a.id,
+              postExternalId: m.id,
+              authorName: c.username ?? "Instagram user",
+              authorHandle: c.username,
+              text: c.text ?? "",
+              commentedAt: c.timestamp ? new Date(c.timestamp) : new Date(),
+            }));
+          })
+        );
+        return lists.flat();
+      }
+      if (a.metaPageId) {
+        const posts = await graphGet(`${a.metaPageId}/posts`, token, { fields: "id", limit: "10" });
+        const lists = await Promise.all(
+          (posts.data ?? []).map(async (p: { id: string }) => {
             const comments = await graphGet(`${p.id}/comments`, token, {
               fields: "id,message,from,created_time",
               limit: "25",
             });
-            for (const c of comments.data ?? []) {
-              out.push({
-                externalId: c.id,
-                accountExternalId: a.id,
-                postExternalId: p.id,
-                authorName: c.from?.name ?? "Facebook user",
-                authorHandle: undefined,
-                text: c.message ?? "",
-                commentedAt: c.created_time ? new Date(c.created_time) : new Date(),
-              });
-            }
-          }
-        }
-      } catch (err) {
-        console.error(`fetchNewComments failed for account ${a.id}:`, err);
+            return (comments.data ?? []).map((c: { id: string; message?: string; from?: { name?: string }; created_time?: string }) => ({
+              externalId: c.id,
+              accountExternalId: a.id,
+              postExternalId: p.id,
+              authorName: c.from?.name ?? "Facebook user",
+              authorHandle: undefined,
+              text: c.message ?? "",
+              commentedAt: c.created_time ? new Date(c.created_time) : new Date(),
+            }));
+          })
+        );
+        return lists.flat();
       }
+    } catch (err) {
+      // Expected for FB Pages until App Review (pages_read_user_content); skip.
+      console.error(`fetchNewComments failed for account ${a.id}:`, err);
     }
-    return out;
+    return [];
   }
 
   async likeComment(externalId: string): Promise<void> {
@@ -142,40 +146,48 @@ export class LiveMetaProvider implements MetaProvider {
 
   async fetchNewDMs(): Promise<IncomingDM[]> {
     const accounts = await connectedAccounts();
-    const out: IncomingDM[] = [];
+    const perAccount = await Promise.all(accounts.map((a) => this.accountDMs(a)));
+    return perAccount.flat();
+  }
 
-    for (const a of accounts) {
-      const token = a.pageAccessToken!;
-      const platform = a.platform === "instagram" ? "instagram" : "messenger";
-      try {
-        const convos = await graphGet(`${a.metaPageId}/conversations`, token, {
-          platform,
-          fields: "id,participants,updated_time,messages.limit(1){id,message,from,created_time}",
-          limit: "25",
+  private async accountDMs(a: {
+    id: string;
+    platform: string;
+    igUserId: string | null;
+    metaPageId: string | null;
+    pageAccessToken: string | null;
+  }): Promise<IncomingDM[]> {
+    const token = a.pageAccessToken!;
+    const platform = a.platform === "instagram" ? "instagram" : "messenger";
+    try {
+      const convos = await graphGet(`${a.metaPageId}/conversations`, token, {
+        platform,
+        fields: "id,participants,updated_time,messages.limit(1){id,message,from,created_time}",
+        limit: "25",
+      });
+      const out: IncomingDM[] = [];
+      for (const conv of convos.data ?? []) {
+        const last = conv.messages?.data?.[0];
+        if (!last) continue;
+        const fromName = last.from?.name ?? last.from?.username;
+        const participant =
+          conv.participants?.data?.find((p: { id: string }) => p.id !== a.metaPageId && p.id !== a.igUserId) ??
+          conv.participants?.data?.[0];
+        out.push({
+          externalId: conv.id,
+          accountExternalId: a.id,
+          participantName: participant?.name ?? participant?.username ?? fromName ?? "User",
+          participantHandle: participant?.username,
+          text: last.message ?? "",
+          messageExternalId: last.id,
+          sentAt: last.created_time ? new Date(last.created_time) : new Date(),
         });
-        for (const conv of convos.data ?? []) {
-          const last = conv.messages?.data?.[0];
-          if (!last) continue;
-          // Skip threads where the most recent message is from us.
-          const fromName = last.from?.name ?? last.from?.username;
-          const participant =
-            conv.participants?.data?.find((p: { id: string }) => p.id !== a.metaPageId && p.id !== a.igUserId) ??
-            conv.participants?.data?.[0];
-          out.push({
-            externalId: conv.id,
-            accountExternalId: a.id,
-            participantName: participant?.name ?? participant?.username ?? fromName ?? "User",
-            participantHandle: participant?.username,
-            text: last.message ?? "",
-            messageExternalId: last.id,
-            sentAt: last.created_time ? new Date(last.created_time) : new Date(),
-          });
-        }
-      } catch (err) {
-        console.error(`fetchNewDMs failed for account ${a.id}:`, err);
       }
+      return out;
+    } catch (err) {
+      console.error(`fetchNewDMs failed for account ${a.id}:`, err);
+      return [];
     }
-    return out;
   }
 
   async sendDM(conversationExternalId: string, message: string): Promise<void> {
