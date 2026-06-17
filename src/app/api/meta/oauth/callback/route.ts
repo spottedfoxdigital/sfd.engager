@@ -47,8 +47,15 @@ export async function GET(req: Request) {
       `${GRAPH}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username},picture&access_token=${longUserToken}`
     ).then((r) => r.json());
 
+    if (pages.error) {
+      const msg = encodeURIComponent(String(pages.error.message ?? "graph error").slice(0, 160));
+      return redirectToAccounts(base, `error=graph&detail=${msg}`);
+    }
+
+    let pageCount = 0;
+    let igCount = 0;
     for (const page of pages.data ?? []) {
-      // Upsert a Facebook account for the Page.
+      pageCount++;
       await upsertAccount({
         name: page.name,
         platform: "facebook",
@@ -58,9 +65,9 @@ export async function GET(req: Request) {
         avatarUrl: page.picture?.data?.url ?? null,
       });
 
-      // If the Page has a connected IG Business account, upsert that too.
       const ig = page.instagram_business_account;
       if (ig?.id) {
+        igCount++;
         await upsertAccount({
           name: ig.username ? `@${ig.username}` : page.name,
           platform: "instagram",
@@ -72,12 +79,16 @@ export async function GET(req: Request) {
         });
       }
     }
+
+    if (pageCount === 0) {
+      return redirectToAccounts(base, "error=no_pages");
+    }
+    return redirectToAccounts(base, `connected=1&pages=${pageCount}&ig=${igCount}`);
   } catch (err) {
     console.error("meta oauth callback failed:", err);
-    return redirectToAccounts(base, "error=exchange_failed");
+    const msg = encodeURIComponent(String(err instanceof Error ? err.message : err).slice(0, 160));
+    return redirectToAccounts(base, `error=exchange_failed&detail=${msg}`);
   }
-
-  return redirectToAccounts(base, "connected=1");
 }
 
 async function upsertAccount(data: {
