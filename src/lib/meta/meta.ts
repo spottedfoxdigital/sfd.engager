@@ -12,23 +12,34 @@ import type { IncomingComment, IncomingDM, MetaProvider } from "./provider";
 // mock provider and none of this code runs.
 
 const GRAPH = "https://graph.facebook.com/v21.0";
+const TIMEOUT_MS = 12_000;
+
+async function fetchJson(url: string, init?: RequestInit) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    const json = await res.json();
+    return { ok: res.ok, json };
+  } finally {
+    clearTimeout(t);
+  }
+}
 
 async function graphGet(path: string, token: string, params: Record<string, string> = {}) {
   const url = new URL(`${GRAPH}/${path}`);
   url.searchParams.set("access_token", token);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  const res = await fetch(url.toString());
-  const json = await res.json();
-  if (!res.ok) throw new Error(`Graph GET ${path} failed: ${JSON.stringify(json)}`);
+  const { ok, json } = await fetchJson(url.toString());
+  if (!ok) throw new Error(`Graph GET ${path} failed: ${JSON.stringify(json)}`);
   return json;
 }
 
 async function graphPost(path: string, token: string, body: Record<string, string>) {
   const url = new URL(`${GRAPH}/${path}`);
   const form = new URLSearchParams({ ...body, access_token: token });
-  const res = await fetch(url.toString(), { method: "POST", body: form });
-  const json = await res.json();
-  if (!res.ok) throw new Error(`Graph POST ${path} failed: ${JSON.stringify(json)}`);
+  const { ok, json } = await fetchJson(url.toString(), { method: "POST", body: form });
+  if (!ok) throw new Error(`Graph POST ${path} failed: ${JSON.stringify(json)}`);
   return json;
 }
 
