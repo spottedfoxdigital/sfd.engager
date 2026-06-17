@@ -26,9 +26,18 @@ export async function ingestComments(): Promise<number> {
         ],
       },
     });
-    const post = await prisma.post.findFirst({ where: { externalId: c.postExternalId } });
-    if (!account || !post) continue;
+    if (!account) continue;
 
+    // Find the post, or create a minimal record for it (live media/posts aren't
+    // pre-seeded the way mock data is).
+    let post = await prisma.post.findFirst({ where: { externalId: c.postExternalId } });
+    if (!post) {
+      post = await prisma.post.create({
+        data: { accountId: account.id, externalId: c.postExternalId, caption: "" },
+      });
+    }
+
+    // Dedupe by external id.
     const exists = await prisma.comment.findFirst({ where: { externalId: c.externalId } });
     if (exists) continue;
 
